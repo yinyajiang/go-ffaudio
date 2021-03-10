@@ -63,7 +63,8 @@ func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (r
 	}
 	f, err = tools.CreateFile(real)
 	if err != nil {
-		goto portaudio
+		//goto portaudio
+		return
 	}
 	defer f.Close()
 	if nil == simpleutil.RecordAiff(ctx, f) {
