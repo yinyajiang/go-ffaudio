@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	tools "github.com/yinyajiang/go-ytools/utils"
+	"github.com/yinyajiang/portaudio/simpleutil"
 )
 
 //ViceFile //副音频文件
@@ -45,6 +49,30 @@ func (ff *FFmpegAudioOperation) TranscodeAnyToWav(ctx context.Context, inp, outp
 		return
 	}
 	return ff.contextWaitOperation(ctx, opid)
+}
+
+//RecordAudio  录音
+func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (real string, err error) {
+	real = outp
+	//if runtime.GOOS == "windows" {
+	//优先使用portaudio
+	var f *os.File
+
+	if path.Ext(real) != ".aiff" {
+		real += ".aiff"
+	}
+	f, err = tools.CreateFile(real)
+	if err != nil {
+		goto portaudio
+	}
+	defer f.Close()
+	if nil == simpleutil.RecordAiff(ctx, f) {
+		return
+	}
+	//}
+	//portaudio:
+	//	err = ff.ffrecordAudio(ctx, outp)
+	return
 }
 
 //Cut 剪切
@@ -118,6 +146,30 @@ func (ff *FFmpegAudioOperation) PreviewAMix(ctx context.Context, mainPath string
 		err = genErr
 	}
 	return
+}
+
+func (ff *FFmpegAudioOperation) ffrecordAudio(ctx context.Context, outp string) (err error) {
+	os.Remove(outp)
+	defname, err := simpleutil.GetDefaultInputDeviceName()
+	if err != nil {
+		return
+	}
+
+	capArg := []string{}
+	if runtime.GOOS == "darwin" {
+		//-f avfoundation  -i ":defname"
+		capArg = append(capArg, "-f", "avfoundation", "-i", `:`+defname)
+	} else {
+		// -f dshow -i audio="defname"
+		capArg = append(capArg, "-f", "dshow", "-i", "audio="+defname)
+	}
+	capArg = append(capArg, "-c:a", "pcm_s16le", "-ac", "2", "-loglevel", "error", outp)
+	fmt.Println(strings.Join(capArg, " "))
+	opid, err := ff.startOperation("./ffmpeg", capArg...)
+	if err != nil {
+		return
+	}
+	return ff.contextWaitOperation(ctx, opid)
 }
 
 func (ff *FFmpegAudioOperation) contextWaitOperation(ctx context.Context, opid int64) (err error) {
