@@ -26,6 +26,8 @@ github.com/yinyajiang/portaudio v0.0.0-20210310045614-5200156b350c h1:YUEpJiLxjt
 github.com/yinyajiang/portaudio v0.0.0-20210310045614-5200156b350c/go.mod h1:cPJalN/HWQKXGg1wHjZnAwGHB17awfaSwiZ7aX1s4B4=
 github.com/yinyajiang/portaudio v0.0.0-20210310062731-941e7adb251e h1:i09EuKXMAHaGxp4s9XYVvAIcIPbCNMXl7fEZW1rO6fE=
 github.com/yinyajiang/portaudio v0.0.0-20210310062731-941e7adb251e/go.mod h1:cPJalN/HWQKXGg1wHjZnAwGHB17awfaSwiZ7aX1s4B4=
+github.com/yinyajiang/portaudio v0.0.0-20210310075737-18743a1ee21d h1:2up39Dt6u7Pxql5DWM+42wBscwOMVwbq4pqBrbrfGP0=
+github.com/yinyajiang/portaudio v0.0.0-20210310075737-18743a1ee21d/go.mod h1:cPJalN/HWQKXGg1wHjZnAwGHB17awfaSwiZ7aX1s4B4=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=

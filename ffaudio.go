@@ -23,8 +23,8 @@ type ViceFile struct {
 
 //FadeArg //淡入淡出参数
 type FadeArg struct {
-	StartLocal float64 //起始位置,s
-	Duration   float64 //时长,s
+	StartLocal int //起始位置,ms
+	Duration   int //时长,ms
 }
 
 //FFmpegAudioOperation ...
@@ -52,7 +52,7 @@ func (ff *FFmpegAudioOperation) TranscodeAnyToWav(ctx context.Context, inp, outp
 }
 
 //RecordAudio  录音
-func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (real string, err error) {
+func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (real string, recordDur int64, err error) {
 	real = outp
 	//if runtime.GOOS == "windows" {
 	//优先使用portaudio
@@ -67,20 +67,20 @@ func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (r
 		return
 	}
 	defer f.Close()
-	if nil == simpleutil.RecordAiff(ctx, f) {
-		return
-	}
+	recordDur, err = simpleutil.RecordAiff(ctx, f)
+	return
+
 	//}
 	//portaudio:
 	//	err = ff.ffrecordAudio(ctx, outp)
 	return
 }
 
-//Cut 剪切
-func (ff *FFmpegAudioOperation) Cut(ctx context.Context, inp string, start, len float64, outp string) (err error) {
+//Cut 剪切,ms
+func (ff *FFmpegAudioOperation) Cut(ctx context.Context, inp string, start, len int, outp string) (err error) {
 	//ffmpeg -i p  -ss start -t len -c copy outp
 	os.Remove(outp)
-	opid, err := ff.startOperation("./ffmpeg", "-loglevel", "error", "-i", inp, "-ss", fmt.Sprintf("%.1f", start), "-t", fmt.Sprintf("%.1f", len),
+	opid, err := ff.startOperation("./ffmpeg", "-loglevel", "error", "-i", inp, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(len)/1000),
 		"-c", "copy", "-loglevel", "error", outp)
 
 	return ff.contextWaitOperation(ctx, opid)
@@ -101,8 +101,8 @@ func (ff *FFmpegAudioOperation) AudioMix(ctx context.Context, mainPath string, f
 }
 
 //PlaySlice ...
-func (ff *FFmpegAudioOperation) PlaySlice(ctx context.Context, p string, start, duration float32) (err error) {
-	opid, err := ff.startOperation("./ffplay", "-i", p, "-ss", fmt.Sprintf("%.1f", start), "-t", fmt.Sprintf("%.1f", duration), "-autoexit", "-nodisp", "-loglevel", "error")
+func (ff *FFmpegAudioOperation) PlaySlice(ctx context.Context, p string, start, duration int) (err error) {
+	opid, err := ff.startOperation("./ffplay", "-i", p, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(duration)/1000), "-autoexit", "-nodisp", "-loglevel", "error")
 	return ff.contextWaitOperation(ctx, opid)
 }
 
@@ -293,7 +293,7 @@ func makeAMixArgs(mainPath string, files []ViceFile, volumePercent float64, fade
 		} else {
 			fileterArg = "[0]"
 		}
-		fileterArg += fmt.Sprintf("afade=t=in:ss=%.1f:d=%.1f[out]", fadein.StartLocal, fadein.Duration)
+		fileterArg += fmt.Sprintf("afade=t=in:ss=%.1f:d=%.1f[out]", float64(fadein.StartLocal)/1000, float64(fadein.Duration)/1000)
 		isOut = true
 	}
 	if fadeout != nil {
@@ -302,7 +302,7 @@ func makeAMixArgs(mainPath string, files []ViceFile, volumePercent float64, fade
 		} else {
 			fileterArg = "[0]"
 		}
-		fileterArg += fmt.Sprintf("afade=t=out:st=%.1f:d=%.1f[out]", fadeout.StartLocal, fadeout.Duration)
+		fileterArg += fmt.Sprintf("afade=t=out:st=%.1f:d=%.1f[out]", float64(fadeout.StartLocal)/1000, float64(fadeout.Duration)/1000)
 		isOut = true
 	}
 	if volumePercent != 1.0 {
