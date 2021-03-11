@@ -76,6 +76,25 @@ func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (r
 	return
 }
 
+//PlayURL 播放url连接
+func (ff *FFmpegAudioOperation) PlayURL(ctx context.Context, url string) (err error) {
+	youtubeDir := ""
+	mpvPath := ""
+	if runtime.GOOS == "windows" {
+		youtubeDir = tools.LocalPath("mpv/windows")
+		mpvPath = tools.LocalPath("mpv/windows/mpv")
+	} else {
+		youtubeDir = tools.LocalPath("mpv/mac")
+		mpvPath = tools.LocalPath("mpv/mac/mpv")
+	}
+	path := os.Getenv("PATH")
+	path += ":" + youtubeDir
+	os.Setenv("PATH", path)
+
+	opid, err := ff.startOperation(mpvPath, "--no-video", url)
+	return ff.contextWaitOperation(ctx, opid)
+}
+
 //Cut 剪切,ms
 func (ff *FFmpegAudioOperation) Cut(ctx context.Context, inp string, start, len int, outp string) (err error) {
 	//ffmpeg -i p  -ss start -t len -c copy outp
