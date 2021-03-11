@@ -76,7 +76,7 @@ func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (r
 	return
 }
 
-//PlayURL 播放url连接
+//PlayURL 播放url连接,需要MPV和youtube-dl
 func (ff *FFmpegAudioOperation) PlayURL(ctx context.Context, url string) (err error) {
 	youtubeDir := ""
 	mpvPath := ""
