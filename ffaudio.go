@@ -126,7 +126,7 @@ func (ff *FFmpegAudioOperation) PlaySlice(ctx context.Context, p string, start, 
 }
 
 //PlayFull ...
-func (ff *FFmpegAudioOperation) PlayFull(ctx context.Context, p string) (err error) {
+func (ff *FFmpegAudioOperation) Play(ctx context.Context, p string) (err error) {
 	opid, err := ff.startOperation("./ffplay", "-i", p, "-autoexit", "-nodisp", "-loglevel", "error")
 	return ff.contextWaitOperation(ctx, opid)
 }
@@ -134,7 +134,7 @@ func (ff *FFmpegAudioOperation) PlayFull(ctx context.Context, p string) (err err
 //PreviewAMix ...
 func (ff *FFmpegAudioOperation) PreviewAMix(ctx context.Context, mainPath string, files []ViceFile, volumePercent float64, fadein, fadeout *FadeArg) (err error) {
 	if len(files) == 0 && volumePercent == 1.0 && fadein == nil && fadeout == nil {
-		return ff.PlayFull(ctx, mainPath)
+		return ff.Play(ctx, mainPath)
 	}
 
 	args := makeAMixArgs(mainPath, files, volumePercent, fadein, fadeout)
