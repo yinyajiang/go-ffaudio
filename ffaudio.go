@@ -213,8 +213,9 @@ func (ff *FFmpegAudioOperation) waitOperation(opid int64) (err error) {
 	if err != nil {
 		return
 	}
-	c := ops[0]
-	err = c.Wait()
+	for _, c := range ops {
+		err = c.Wait()
+	}
 	ff.delOps(opid)
 	return
 }
@@ -227,9 +228,7 @@ func (ff *FFmpegAudioOperation) terminateOperation(opid int64) (err error) {
 	}
 	for _, c := range ops {
 		err = c.Process.Kill()
-		c.Process.Release()
 	}
-	ff.delOps(opid)
 	return
 }
 
