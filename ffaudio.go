@@ -31,12 +31,18 @@ type FadeArg struct {
 type FFmpegAudioOperation struct {
 	ffmpegProcess map[int64][]*exec.Cmd
 	sync.Mutex
+	ffmpegDir     string
+	youtubedlPath string
+	mpvPath       string
 }
 
 //NewFFOperation ...
-func NewFFOperation() *FFmpegAudioOperation {
+func NewFFOperation(ffmpegDir, youtubedlPath, mpvPath string) *FFmpegAudioOperation {
 	return &FFmpegAudioOperation{
-		ffmpegProcess: make(map[int64][]*exec.Cmd, 0),
+		ffmpegProcess: make(map[int64][]*exec.Cmd),
+		ffmpegDir:     ffmpegDir,
+		youtubedlPath: youtubedlPath,
+		mpvPath:       mpvPath,
 	}
 }
 
@@ -44,7 +50,7 @@ func NewFFOperation() *FFmpegAudioOperation {
 func (ff *FFmpegAudioOperation) TranscodeAnyToWav(ctx context.Context, inp, outp string) (err error) {
 	//ffmpeg -i p -vn -c:a pcm_s16le  output.wav
 	os.Remove(outp)
-	opid, err := ff.startOperation("./ffmpeg", "-loglevel", "error", "-i", inp, "-vn", "-c:a", "pcm_s16le", "-ac", "2", outp)
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffmpeg", "-loglevel", "error", "-i", inp, "-vn", "-c:a", "pcm_s16le", "-ac", "2", outp)
 	if err != nil {
 		return
 	}
@@ -78,20 +84,14 @@ func (ff *FFmpegAudioOperation) RecordAudio(ctx context.Context, outp string) (r
 
 //PlayURL 播放url连接,需要MPV和youtube-dl
 func (ff *FFmpegAudioOperation) PlayURL(ctx context.Context, url string) (err error) {
-	youtubeDir := ""
-	mpvPath := ""
-	if runtime.GOOS == "windows" {
-		youtubeDir = tools.LocalPath("mpv/windows")
-		mpvPath = tools.LocalPath("mpv/windows/mpv")
-	} else {
-		youtubeDir = tools.LocalPath("mpv/mac")
-		mpvPath = tools.LocalPath("mpv/mac/mpv")
-	}
 	path := os.Getenv("PATH")
-	path += ":" + youtubeDir
+	path += ":" + tools.AbsParent(ff.youtubedlPath)
 	os.Setenv("PATH", path)
 
-	opid, err := ff.startOperation(mpvPath, "--no-video", url)
+	opid, err := ff.startOperation(ff.mpvPath, "--no-video", url)
+	if err != nil {
+		return
+	}
 	return ff.contextWaitOperation(ctx, opid)
 }
 
@@ -99,9 +99,11 @@ func (ff *FFmpegAudioOperation) PlayURL(ctx context.Context, url string) (err er
 func (ff *FFmpegAudioOperation) Cut(ctx context.Context, inp string, start, len int, outp string) (err error) {
 	//ffmpeg -i p  -ss start -t len -c copy outp
 	os.Remove(outp)
-	opid, err := ff.startOperation("./ffmpeg", "-loglevel", "error", "-i", inp, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(len)/1000),
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffmpeg", "-loglevel", "error", "-i", inp, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(len)/1000),
 		"-c", "copy", "-loglevel", "error", outp)
-
+	if err != nil {
+		return
+	}
 	return ff.contextWaitOperation(ctx, opid)
 }
 
@@ -115,19 +117,28 @@ func (ff *FFmpegAudioOperation) AudioMix(ctx context.Context, mainPath string, f
 	args = append(args, outp)
 
 	os.Remove(outp)
-	opid, err := ff.startOperation("./ffmpeg", args...)
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffmpeg", args...)
+	if err != nil {
+		return
+	}
 	return ff.contextWaitOperation(ctx, opid)
 }
 
 //PlaySlice ...
 func (ff *FFmpegAudioOperation) PlaySlice(ctx context.Context, p string, start, duration int) (err error) {
-	opid, err := ff.startOperation("./ffplay", "-i", p, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(duration)/1000), "-autoexit", "-nodisp", "-loglevel", "error")
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffplay", "-i", p, "-ss", fmt.Sprintf("%.1f", float64(start)/1000), "-t", fmt.Sprintf("%.1f", float64(duration)/1000), "-autoexit", "-nodisp", "-loglevel", "error")
+	if err != nil {
+		return
+	}
 	return ff.contextWaitOperation(ctx, opid)
 }
 
 //PlayFull ...
 func (ff *FFmpegAudioOperation) Play(ctx context.Context, p string) (err error) {
-	opid, err := ff.startOperation("./ffplay", "-i", p, "-autoexit", "-nodisp", "-loglevel", "error")
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffplay", "-i", p, "-autoexit", "-nodisp", "-loglevel", "error")
+	if err != nil {
+		return
+	}
 	return ff.contextWaitOperation(ctx, opid)
 }
 
@@ -139,10 +150,10 @@ func (ff *FFmpegAudioOperation) PreviewAMix(ctx context.Context, mainPath string
 
 	args := makeAMixArgs(mainPath, files, volumePercent, fadein, fadeout)
 	args = append(args, "-f", "wav", "-") //输出到标准输出
-	gen := exec.Command("./ffmpeg", args...)
+	gen := exec.Command(ff.ffmpegDir+"/ffmpeg", args...)
 	gen.Stderr = os.Stderr
 
-	play := exec.Command("./ffplay", "-i", "-", "-autoexit", "-nodisp", "-loglevel", "error") //从标准输入读取
+	play := exec.Command(ff.ffmpegDir+"/ffplay", "-i", "-", "-autoexit", "-nodisp", "-loglevel", "error") //从标准输入读取
 	play.Stderr = os.Stderr
 	genPipe, err := gen.StdoutPipe() //从ffmpeg 的标准输出获取流
 	if err != nil {
@@ -185,7 +196,7 @@ func (ff *FFmpegAudioOperation) ffrecordAudio(ctx context.Context, outp string) 
 	}
 	capArg = append(capArg, "-c:a", "pcm_s16le", "-ac", "2", "-loglevel", "error", outp)
 	fmt.Println(strings.Join(capArg, " "))
-	opid, err := ff.startOperation("./ffmpeg", capArg...)
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffmpeg", capArg...)
 	if err != nil {
 		return
 	}
