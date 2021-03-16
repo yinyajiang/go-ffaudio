@@ -2,6 +2,7 @@ package ffaudio
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,6 +39,10 @@ type FFmpegAudioOperation struct {
 
 //NewFFOperation ...
 func NewFFOperation(ffmpegDir, youtubedlPath, mpvPath string) *FFmpegAudioOperation {
+	if strings.HasSuffix(ffmpegDir, "/") || strings.HasSuffix(ffmpegDir, "\\") {
+		ffmpegDir = ffmpegDir[:len(ffmpegDir)-1]
+	}
+
 	return &FFmpegAudioOperation{
 		ffmpegProcess: make(map[int64][]*exec.Cmd),
 		ffmpegDir:     ffmpegDir,
@@ -55,6 +60,24 @@ func (ff *FFmpegAudioOperation) TranscodeAnyToWav(ctx context.Context, inp, outp
 		return
 	}
 	return ff.contextWaitOperation(ctx, opid)
+}
+
+//TranscodeAnyToAny 提取音频转为任何格式
+func (ff *FFmpegAudioOperation) TranscodeAnyToAny(ctx context.Context, inp, outp string) (err error) {
+	realName := outp
+	if path.Ext(outp) == ".m4r" {
+		outp += ".m4a"
+	}
+	os.Remove(outp)
+	opid, err := ff.startOperation(ff.ffmpegDir+"/ffmpeg", "-loglevel", "error", "-i", inp, "-vn", "-ac", "2", outp)
+	if err != nil {
+		return
+	}
+	err = ff.contextWaitOperation(ctx, opid)
+	if err != nil {
+		return
+	}
+	return os.Rename(outp, realName)
 }
 
 //RecordAudio  录音
@@ -142,6 +165,26 @@ func (ff *FFmpegAudioOperation) Play(ctx context.Context, p string) (err error) 
 	return ff.contextWaitOperation(ctx, opid)
 }
 
+func (ff *FFmpegAudioOperation) ProbeFormat(p string) (formatinfo map[string]interface{}, err error) {
+
+	probe := exec.Command(ff.ffmpegDir+"/ffprobe", "-i", p, "-show_format", "-print_format", "json", "-loglevel", "error") //从标准输入读取
+	probe.Stderr = os.Stderr
+	outPipe, err := probe.StdoutPipe() //ffprobe 的标准输出获取流
+	if err != nil {
+		return
+	}
+	err = probe.Start()
+	if err != nil {
+		return
+	}
+	err = json.NewDecoder(outPipe).Decode(&formatinfo)
+	if err != nil {
+		return
+	}
+	err = probe.Wait()
+	return
+}
+
 //PreviewAMix ...
 func (ff *FFmpegAudioOperation) PreviewAMix(ctx context.Context, mainPath string, files []ViceFile, volumePercent float64, fadein, fadeout *FadeArg) (err error) {
 	if len(files) == 0 && volumePercent == 1.0 && fadein == nil && fadeout == nil {
@@ -161,13 +204,10 @@ func (ff *FFmpegAudioOperation) PreviewAMix(ctx context.Context, mainPath string
 	}
 	play.Stdin = genPipe
 
-	ch := make(chan struct{}, 1)
 	var genErr error
 	go func() {
 		genErr = gen.Start()
-		ch <- struct{}{}
 	}()
-	<-ch
 	err = play.Start()
 	if err == nil && genErr == nil {
 		opid := ff.addOp(0, gen)
