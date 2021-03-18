@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,17 +39,30 @@ type FFmpegAudioOperation struct {
 }
 
 //NewFFOperation ...
-func NewFFOperation(ffmpegDir, youtubedlPath, mpvPath string) *FFmpegAudioOperation {
+func NewFFOperation(ffmpegDir, youtubedlPath, mpvPath string) (ff *FFmpegAudioOperation, err error) {
 	if strings.HasSuffix(ffmpegDir, "/") || strings.HasSuffix(ffmpegDir, "\\") {
 		ffmpegDir = ffmpegDir[:len(ffmpegDir)-1]
 	}
 
-	return &FFmpegAudioOperation{
+	if runtime.GOOS == "darwin" {
+		if !tools.IsExist(ffmpegDir + "/ffmpeg") {
+			err = fmt.Errorf("Not found ffmpeg")
+			return
+		}
+	} else {
+		if !tools.IsExist(ffmpegDir + "/ffmpeg.exe") {
+			err = fmt.Errorf("Not found ffmpeg")
+			return
+		}
+	}
+
+	ff = &FFmpegAudioOperation{
 		ffmpegProcess: make(map[int64][]*exec.Cmd),
 		ffmpegDir:     ffmpegDir,
 		youtubedlPath: youtubedlPath,
 		mpvPath:       mpvPath,
 	}
+	return
 }
 
 //TranscodeAnyToWav 转音频、视频为wav
@@ -177,11 +191,47 @@ func (ff *FFmpegAudioOperation) ProbeFormat(p string) (formatinfo map[string]int
 	if err != nil {
 		return
 	}
-	err = json.NewDecoder(outPipe).Decode(&formatinfo)
+	var tmpformat map[string]interface{}
+	err = json.NewDecoder(outPipe).Decode(&tmpformat)
 	if err != nil {
 		return
 	}
 	err = probe.Wait()
+	formatinter, ok := tmpformat["format"]
+	if !ok {
+		err = fmt.Errorf("probe format fail")
+		return
+	}
+	formatinfo, ok = formatinter.(map[string]interface{})
+	if !ok {
+		err = fmt.Errorf("probe format parse fail")
+		return
+	}
+	return
+}
+
+func (ff *FFmpegAudioOperation) ProbeDuration(p string) (dur uint64) {
+	formatinfo, err := ff.ProbeFormat(p)
+	if err != nil {
+		return
+	}
+
+	durinter, ok := formatinfo["duration"]
+	if !ok {
+		return
+	}
+
+	durstr, ok := durinter.(string)
+	if ok {
+		durflot, err := strconv.ParseFloat(durstr, 64)
+		if err != nil {
+			return
+		}
+		durflot *= 1000
+		dur = uint64(durflot)
+	} else {
+		dur, _ = durinter.(uint64)
+	}
 	return
 }
 
